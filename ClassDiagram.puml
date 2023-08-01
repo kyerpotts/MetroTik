@@ -1,0 +1,259 @@
+@startuml
+!theme reddress-darkblue
+title Metrotik\nClass Diagram
+
+'CLASSES
+
+class App {
+  + main(String[] args): void
+  - executeUI(mainController: MainController, notificationHandler: NotificationHandler): void
+  - instantiateTicketManager(): TicketManager
+}
+App *--> controller.MainController
+App *--> useraccounts.UserAccount
+App *--> userinterface.NotificationHandler
+App *--> ticketing.TicketFactory
+App *--> ticketingsystem.TicketManager
+App *--> monorailsimulator.MonorailSimulator
+
+package "controller" {
+    class MainController {
+      - rIMEDTICKETPRICE: double
+      - zONETICKETPRICE: double
+      - ticketFactory: TicketFactory
+      - ticketManager: TicketManager
+      - notificationHandler: NotificationHandler
+      - userAccount: UserAccount
+      - monorailSimulator: MonorailSimulator
+
+      + requestZoneTravel(zones: int): boolean
+      + requestTimedTicketPurchase(validFrom: LocalDateTime): boolean
+      + requestZoneTicketPurchase(zones: int): boolean
+      + deactivateAccount(): void
+      + addFunds(funds: double): void
+      + getAccountBalance(): String
+      + getAccountStatus(): String
+      + getCurrentStation(): String
+      - transact(amount: double): boolean
+    } 
+    MainController o..> TicketFactory
+    MainController o..> TicketManager
+    MainController o..> NotificationHandler
+    MainController o..> UserAccount
+    MainController o..> MonorailSimulator
+}
+
+package "monorailsimulator" {
+    class MonorailSimulator {
+      - int currentZone;
+      + travelZone(): void
+      + getCurrentZone(): int
+    }
+}
+
+package "ticketing" {
+    interface Ticket {
+      + addTicketObserver(observer: TicketObserver): void
+      + travelZone(): boolean
+      + getTicketID(): int
+      + getPurchaseTimeDate(): LocalDateTime
+      + checkZoneTravel(zones: int): int
+    }
+    Ticket o..> TicketObserver
+
+    class TicketFactory {
+      - ticketID: int
+      - zoneAllocation: int
+      - validFrom: LocalDateTime
+      + createTicket(): Ticket
+      + primeTicketFactory(validFrom: LocalDateTime): void
+      + primeTicketFactory(zones: int): void
+    }
+    TicketFactory *--> "0..*"Ticket : creates
+    TicketFactory *--> TicketInstantiationException : throws
+
+    class TicketInstantiationException {
+    }
+
+    class TicketingException {
+    }
+
+    interface TicketObserver {
+      + invalidateTicket(ticket: Ticket): void
+    }
+    TicketObserver o..> Ticket
+
+    class TimedTicket implements Ticket {
+      - ticketObservers: Set<TicketObserver>
+      - ticketID: int
+      - timeDatePurchased: LocalDateTime
+      - validFrom: LocalDateTime
+      - validTo: LocalDateTime
+      + addTicketObserver(observer: TicketObserve): void
+      + travelZone(): boolean
+      + getTicketID(): int
+      + getPurchaseTimeDate(): LocalDateTime
+      + checkZoneTravel(zone: int): int
+      + toString(): String
+      - invalidateTicket(): void
+      - isValid(currentTime: LocalDateTime): boolean
+    }
+    TimedTicket o..> "0..*" TicketObserver
+
+    class ZoneTicket implements Ticket {
+      - ticketObservers: Set<TicketObserver>
+      - ticketID: int
+      - timeDatePurchased: LocalDateTime
+      - zoneAllocation: int
+      + addTicketObserver(observer: TicketObserver): void
+      + travelZone(): boolean
+      + getTicketID(): int
+      + getPurchaseTimeDate(): LocalDateTime
+      + checkZoneTravel(zones: int): int
+      + toString(): String
+      - invalidateTicket(): void
+    }
+    ZoneTicket o..> "0..*" TicketObserver
+    ZoneTicket *..> TicketingException : throws
+}
+
+package "ticketingsystem" {
+    class TicketChain<T extends Ticket> implements ticketing.TicketObserver {
+      <<generic>>
+      - tickets: Set<T>
+      + addTicket(ticket: T) : void
+      + getTickets(): Set<T>
+      + invalidateTicket(ticket: Ticket): void
+      + canTravelZones(zones: int): boolean
+      +  travelZone(): boolean
+    }
+    TicketChain o..> "0..*" Ticket
+
+    class TicketManager {
+      - zoneTickets: TicketChain<Ticket>
+      - timedTickets: TicketChain<Ticket>
+      + addZoneTicket(zoneTicket: Ticket, userAccount: UserAccount): void
+      + addTimedTicket(timedTicket: Ticket, userAccount: UserAccount): void
+      + canRideForRequestedZones(zones: int): boolean
+      + travelRequestedZones(): boolean
+    }
+    TicketManager *..> "2" TicketChain
+    TicketManager o..> UserAccount
+}
+
+package "useraccounts" {
+    class UserAccount {
+      - currentState: AccountState
+      - ticketHistory: Set<Ticket>
+      - accountStateObservers: Set<AccountStateObserver>
+      - accountTransactionObservers: Set<AccountTransactionObserver>
+      - accountID: int
+      - firstName: String
+      - lastName: String
+      - email: String
+      - funds: double
+      + getAccountID(): int
+      + getFirstName(): String
+      + getLastName(): String
+      + getEmail(): String
+      + getFunds(): double
+      + getState(): String
+      + subscribeAccountStateObserver(accountStateObserver: AccountStateObserver): void
+      + subscribeAccountTransactionObserver(accountTransactionObserver: AccountTransactionObserver): void
+      + creditFunds(credit: double): void
+      + debitFunds(debit: double): void
+      + deactivateAccount(): void
+      + addTicketToTicketHistory(ticket: Ticket): void
+      + setAccountState(newState: AccountState): void
+      ~ notifyAccountStateObservers(newEvent: AccountEvent): void
+      ~ notifyAccountTransactionObservers(newEvent: AccountEvent): void
+    }
+    UserAccount o..> "0..*" Ticket
+    UserAccount o..> "0..*" AccountStateObserver
+    UserAccount o..> "0..*" AccountTransactionObserver
+    UserAccount *..> AccountState
+    UserAccount --> AccountEvent
+
+    class AccountEvent {
+      - origin: UserAccount
+      - message: String
+      - eventSuccess: boolean
+      + getOrigin(): UserAccount
+      + getMessage(): String
+      + isEventSuccess(): boolean
+    }
+    AccountEvent o..> UserAccount
+
+    class AccountFundsException {
+    }
+
+    interface AccountState {
+      + creditFunds(credit: double): double
+      + debitFunds(debit: double): double
+      + deactivateAccount(): void
+      + getAccountState(): String
+    }
+
+    interface AccountStateObserver {
+      + accountStateUpdated(accountEvent: AccountEvent): void
+    }
+    AccountStateObserver o..> AccountEvent
+
+    interface AccountTransactionObserver {
+      + accountTransactionEventOccured(accountEvent: AccountEvent): void
+    }
+    AccountTransactionObserver o..> AccountEvent
+
+    class FundMutatorValidator {
+      + checkForInvalidFundMutator(mutator: double): void
+    }
+    FundMutatorValidator o..> AccountFundsException : throws
+
+    class DeactivatedState implements AccountState {
+      - mutatorValidator: FundMutatorValidator
+    }
+    DeactivatedState *..> FundMutatorValidator
+
+    class GoodStandingState implements AccountState {
+      - mutatorValidator: FundMutatorValidator
+    }
+    GoodStandingState *..> FundMutatorValidator
+
+    class InDebtState implements AccountState {
+      - mutatorValidator: FundMutatorValidator
+    }
+    InDebtState *..> FundMutatorValidator
+}
+
+package "userinterface" {
+    class AccountDetails {
+      - controller: MainController
+      + printAccountBalance(): void
+      + printAccountStatus(): void
+    }
+    AccountDetails o..> MainController
+
+    class CurrentStation {
+      - controller: MainController
+      + printCurrentStation(): void
+    }
+
+    class Menu {
+      - controller: MainController
+      + printMainOptions(): void
+      + addFundsSelection(): void
+      + deactivateAccount(): void
+      + zoneTravelSelection(): void
+      + ticketPurchaseSelection(): void
+      - timedTicketPurchase(): void
+      - zoneTicketPurchase(): void
+    }
+    Menu o..> MainController
+
+    class NotificationHandler implements ticketing.TicketObserver, useraccounts.AccountStateObserver, useraccounts.AccountTransactionObserver {
+      - notificationQueue: Queue<String>
+      + printNotifications(): void
+    }
+}
+
+@enduml

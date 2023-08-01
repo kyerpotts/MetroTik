@@ -1,0 +1,26 @@
+@startuml
+!theme reddress-darkblue
+hide empty description
+title Metrotik\nState Diagram
+State Active {
+  State GoodStandingState {
+  }
+
+  State InDebtState {
+  }
+}
+
+State DeactivatedState {
+
+}
+
+[*] --> GoodStandingState
+GoodStandingState --> [*]
+InDebtState --> [*]
+DeactivatedState --> [*]
+
+GoodStandingState --> InDebtState : debitFunds() [funds > 0] notifyAccountStateObservers()
+GoodStandingState --> DeactivatedState : deactivateAccount() notifyAccountStateObservers()
+InDebtState --> GoodStandingState : creditFunds() [funds < 0] notifyAccountStateObservers()
+
+@enduml
